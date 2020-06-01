@@ -36,6 +36,7 @@ import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -89,7 +90,8 @@ public class ParquetLoader extends LoadFunc implements LoadMetadata, LoadPushDow
   private static final boolean DEFAULT_PREDICATE_PUSHDOWN_ENABLED = false;
 
   // Using a weak hash map will ensure that the cache will be gc'ed when there is memory pressure
-  static final Map<String, Reference<ParquetInputFormat<Tuple>>> inputFormatCache = new WeakHashMap<String, Reference<ParquetInputFormat<Tuple>>>();
+  static final Map<String, Reference<ParquetInputFormat<Tuple>>> inputFormatCache = Collections.synchronizedMap(
+      new WeakHashMap<String, Reference<ParquetInputFormat<Tuple>>>());
 
   private Schema requestedSchema;
   private boolean columnIndexAccess;
