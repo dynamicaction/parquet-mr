@@ -546,6 +546,24 @@ public class PigSchemaConverter {
       // Bags always contain tuples => we skip the extra tuple that was inserted in that case.
       innerField = innerField.schema.getField(0);
     }
+    // DnA: Support for reading data written by Presto/Hive. Arrays are wrapped in a single-field type with an
+    // array_element item containing the element. This removes that level of nesting to get us to the structure that
+    // Pig expects. See TupleConverver.BagConverter for the corresponding changes for reading actual data.
+    if (nested instanceof GroupType) {
+        GroupType nestedGroup = (GroupType) nested;
+        if (nestedGroup.getFieldCount() == 1) {
+            Type nested2 = nestedGroup.getType(0);
+            if ("array_element".equals(nested2.getName())) {
+                if (nested2.isPrimitive()) {
+                    // Primitive type, so leave the array_element level to preserve the tuple that Pig expects
+                    return bagType;
+                } else {
+                    // Complex type. Remove the extra layer of nesting.
+                    return bagType.withNewFields(nestedGroup.withNewFields(filter(nested2, innerField)));
+                }
+            }
+        }
+    }
     return bagType.withNewFields(filter(nested, innerField));
   }
 }
