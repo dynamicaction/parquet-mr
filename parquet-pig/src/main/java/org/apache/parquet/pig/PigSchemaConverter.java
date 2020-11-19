@@ -545,6 +545,13 @@ public class PigSchemaConverter {
       // Bags always contain tuples => we skip the extra tuple that was inserted in that case.
       innerField = innerField.schema.getField(0);
     }
+    if (nested instanceof GroupType) {
+        GroupType nestedGroup = (GroupType) nested;
+        if (nestedGroup.getFieldCount() == 1 && "array_element".equals(nestedGroup.getType(0).getName())) {
+            Type nested2 = nestedGroup.getType(0);
+            return bagType.withNewFields(nestedGroup.withNewFields(filter(nested2, innerField)));
+        }
+    }
     return bagType.withNewFields(filter(nested, innerField));
   }
 }

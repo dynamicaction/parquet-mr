@@ -1,5 +1,6 @@
 cd ~/git/parquet-mr/parquet-pig
 
+mvn jar:jar
 mvn source:jar
 
 mvn install:install-file -DpomFile=pom.xml -Dversion=1.11.0-ecm -Dsource=target/parquet-pig-1.11.0-sources.jar -Dfile=target/parquet-pig-1.11.0.jar

@@ -72,7 +72,7 @@ public class TupleConverter extends GroupConverter {
         FieldSchema field = pigSchema.getField(i);
         if(parquetSchema.containsField(field.alias) || columnIndexAccess) {
           Type type = getType(columnIndexAccess, field.alias, i);
-
+          
           if(type != null) {
             final int index = i;
             converters[c++] = newConverter(field, type, new ParentValueContainer() {
@@ -83,7 +83,7 @@ public class TupleConverter extends GroupConverter {
             }, elephantBirdCompatible, columnIndexAccess);
           }
         }
-
+        
       }
     } catch (FrontendException e) {
       throw new ParquetDecodingException("can not initialize pig converter from:\n" + parquetSchema + "\n" + pigSchema, e);
@@ -98,10 +98,10 @@ public class TupleConverter extends GroupConverter {
     } else {
       return parquetSchema.getType(parquetSchema.getFieldIndex(alias));
     }
-
+    
     return null;
   }
-
+  
   static Converter newConverter(FieldSchema pigField, Type type, final ParentValueContainer parent, boolean elephantBirdCompatible, boolean columnIndexAccess) {
     try {
       switch (pigField.type) {
@@ -545,7 +545,15 @@ public class TupleConverter extends GroupConverter {
         throw new IllegalArgumentException("bags have only one field. " + parquetSchema + " size = " + parquetSchema.getFieldCount());
       }
       Type nestedType = parquetSchema.getType(0);
-
+      GroupType unwrapParentType = null;
+      if (nestedType instanceof GroupType) {
+          GroupType nestedGroup = (GroupType) nestedType;
+          if (nestedGroup.getFieldCount() == 1 && "array_element".equals(nestedGroup.getType(0).getName())) {
+              unwrapParentType = nestedGroup;
+              nestedType = nestedGroup.getType(0);
+          }
+      }
+      
       ParentValueContainer childsParent;
       FieldSchema pigField;
       if (nestedType.isPrimitive() || nestedType.getLogicalTypeAnnotation() instanceof LogicalTypeAnnotation.MapLogicalTypeAnnotation
@@ -565,6 +573,10 @@ public class TupleConverter extends GroupConverter {
             buffer.add((Tuple)value);
           }};
         pigField = pigSchema.schema.getField(0);
+      }
+      if (unwrapParentType != null) {
+        child = new ElementUnwrappingConverter(unwrapParentType, pigField, childsParent, numbersDefaultToZero, columnIndexAccess);
+        return;
       }
       child = newConverter(pigField, nestedType, childsParent, numbersDefaultToZero, columnIndexAccess);
     }
@@ -589,5 +601,34 @@ public class TupleConverter extends GroupConverter {
     }
 
   }
+  
+  static class ElementUnwrappingConverter extends GroupConverter {
+      private final Converter child;
 
+      ElementUnwrappingConverter(GroupType parquetSchema, FieldSchema pigSchema, ParentValueContainer parent, boolean numbersDefaultToZero, boolean columnIndexAccess) throws FrontendException {
+        if (parquetSchema.getFieldCount() != 1) {
+          throw new IllegalArgumentException("array elements should have only one field. " + parquetSchema + " size = " + parquetSchema.getFieldCount());
+        }
+        Type nestedType = parquetSchema.getType(0);
+
+        child = newConverter(pigSchema, nestedType, parent, numbersDefaultToZero, columnIndexAccess);
+      }
+
+      @Override
+      public Converter getConverter(int fieldIndex) {
+        if (fieldIndex != 0) {
+          throw new IllegalArgumentException("array elements have only one field. can't reach " + fieldIndex);
+        }
+        return child;
+      }
+
+
+      @Override
+      final public void start() {
+      }
+
+      @Override
+      public void end() {
+      }
+    }
 }
