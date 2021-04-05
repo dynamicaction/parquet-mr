@@ -329,6 +329,18 @@ public class PigSchemaConverter {
               if (!tupleType.isRepetition(Repetition.REPEATED)) {
                 throw new SchemaConversionException("Invalid list type " + parquetGroupType);
               }
+              // DnA: Support for reading data written by Presto/Hive. Arrays are wrapped in a single-field type with an
+              // array_element item containing the element. This removes that level of nesting to get us to the structure that
+              // Pig expects. See TupleConverver.BagConverter for the corresponding changes for reading actual data.
+              // See also filterBag() below.
+              if (tupleType.getFieldCount() == 1 && "array_element".equals(tupleType.getFieldName(0))) {
+                  Type elementType = tupleType.getFields().get(0);
+                  // If the type is primitive, leave the array_element level to preserve the tuple that Pig expects
+                  if (!elementType.isPrimitive()) {
+                      // Complex type. Remove the extra layer of nesting.
+                      tupleType = tupleType.withNewFields(elementType.asGroupType().getFields());
+                  }
+              }
               Schema tupleSchema = new Schema(new FieldSchema(tupleType.getName(), convertFields(tupleType.getFields()), DataType.TUPLE));
               return of(new FieldSchema(fieldName, tupleSchema, DataType.BAG));
             } catch (FrontendException e) {
@@ -549,6 +561,7 @@ public class PigSchemaConverter {
     // DnA: Support for reading data written by Presto/Hive. Arrays are wrapped in a single-field type with an
     // array_element item containing the element. This removes that level of nesting to get us to the structure that
     // Pig expects. See TupleConverver.BagConverter for the corresponding changes for reading actual data.
+    // See also getComplexFieldSchema() above.
     if (nested instanceof GroupType) {
         GroupType nestedGroup = (GroupType) nested;
         if (nestedGroup.getFieldCount() == 1) {
